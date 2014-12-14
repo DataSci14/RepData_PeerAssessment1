@@ -1,0 +1,99 @@
+---
+title: "Reproducible Research: Peer Assessment 1"
+author: "Michael Mateling"
+date: "December 14, 2014"
+output: 
+  html_document:
+    keep_md:true
+---
+
+# Reproducible Research: Peer Assessment 1
+
+## Analysis of total steps taken by day
+
+This report follows up on data in the activity.zip file which contains the activity.csv dataset.  The file contains personal movements, voluntarily recorded using an activity monitoring device and includes the number of steps taken in 5-minute intervals each day.
+
+### Load the activity monitoring data from the csv file:
+```{r,echo=TRUE}
+csv <- read.csv("activity.csv")
+```
+
+### Solve the sum of total steps taken per day:  
+Using the summary command to get the mean and median total steps taken by day (The mean number of steps is 10766 and median number of steps is 10765.  These calculations take into account all recorded steps across all recorded days in October and November. 8 NA values/rows were found and ignored when calculating the mean and median):
+```{r,echo=TRUE}
+library("plyr")
+meanmedsum <- ddply(csv, .(date), summarise, sum = sum(as.numeric(as.character(steps))))
+meanmedsum
+summary(meanmedsum)
+```
+## Mean: 10766 
+## Median: 10765
+
+### Use ggplot2 to produce histogram of total steps taken each day:
+```{r,echo=TRUE}
+library("ggplot2")
+g <- ggplot(meanmedsum, aes(date, sum))
+g + geom_histogram(stat = "identity", aes(fill = sum)) + theme(axis.text.x = element_text(angle = 90, vjust = 0.25, size = 7)) + labs(title = "Total steps taken each day") + labs(y = "Total steps")
+```
+
+### Create a time series plot with 5-minute intervals:
+The maximum average steps taken during a 5-minute interval are reported below: 
+
+```{r,echo=TRUE}
+x <- ddply(csv, .(interval), summarise, mean = mean(steps, na.rm=TRUE))
+plot(x, type = "l", ylab="Average steps", xlab="minutes/day, starting @ 12am (values recorded in 5-min intervals)", main="Average steps taken from 10-01-14 to 11-30-14")
+summary(x)
+y <- subset(x, x$mean==max(x$mean))
+y
+```
+## Max average steps: 206
+
+## 5-minute interval with, on average, the max number of steps: 835 (ie: 8:35am)
+
+
+### Imputation of missing values into the dataset:
+Missing values were assigned the mean value of each 5-minute interval to NAs occuring in their respective 5-minute interval.  Total missing step values in the dataset is reported.
+```{r,echo=TRUE}
+summary(csv)
+adjNA <- data.frame()
+for(i in levels(factor(csv[,3]))) {
+  z <- subset(csv, csv[,3]==i)
+  zz <- mean(z[,1], na.rm=TRUE)
+  z[is.na(z)] <- zz
+  adjNA <- rbind(adjNA, z) }
+  averages <- ddply(adjNA, .(interval), summarise, mean = mean(steps))
+```
+
+## Total missing step values in the dataset: 2304
+
+### Use ggplot2 to produce a histogram of total steps taken each day:
+This histogram uses the new dataset that has replaced NAs with their respective 5-minute interval average:
+```{r,echo=TRUE} 
+adjNAsum <- ddply(adjNA, .(date), summarise, sum = sum(as.numeric(as.character(steps))))
+adjNAsum
+summary(adjNAsum)
+h <- ggplot(adjNAsum, aes(date, sum))
+h + geom_histogram(stat = "identity", aes(fill = sum)) + theme(axis.text.x = element_text(angle = 90, vjust = 0.25, size = 7)) + labs(title = "Total steps taken each day") + labs(y = "Total steps")
+```
+## New mean: 10766 
+## New median: 10766
+The mean is unchanged because average 5-minute intervals sum to the mean.  The median has increased slightly to 10766 as a result of converting the NA values.
+
+
+### Weekday vs weekend pattern recognition:
+Using dataset with filled-in missing values, a new factor variable is created with two levels "weekend" and "weekday".  Using ggplot2, a panel plot containing time series plots of 5-minute intervals for weekends and weekdays is created.  This offers an alternative way to see the data by separating activity based on workdays versus days off; assuming volunteers have a standard Monday-Friday job and/or classes.
+```{r,echo=TRUE}
+day <- weekdays(as.Date(adjNA$date))
+day <- gsub("Saturday","weekend",day)
+day <- gsub("Sunday","weekend",day)
+day <- gsub("Monday","weekday",day)
+day <- gsub("Tuesday","weekday",day)
+day <- gsub("Wednesday","weekday",day)
+day <- gsub("Thursday","weekday",day)
+day <- gsub("Friday","weekday",day)
+adjNA <- cbind(adjNA, day)
+xx <- ddply(adjNA, .(interval, day), summarise, mean = round(mean(steps), 7))
+t <- ggplot(xx, aes(interval, mean))
+t + geom_line() + facet_grid(day~.) + labs(y = "Average steps") + labs(title = "Average steps taken (weekdays vs. weekends)")
+```
+
